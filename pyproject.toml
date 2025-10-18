@@ -15,7 +15,7 @@ authors = [
 dependencies = []
 
 [project.urls]
-"Homepage" = "Homepage = "https://github.com/marcdelabarrera/pydata"
+"Homepage" = "https://github.com/marcdelabarrera/pydata"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
