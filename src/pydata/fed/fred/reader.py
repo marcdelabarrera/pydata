@@ -4,22 +4,24 @@ import pandas as pd
 import numpy as np
 import time
 import datetime 
+import os
 
 API_URL = 'https://api.stlouisfed.org/fred'
 
 ListLike = list[str]|pd.Series|str
 
+def set_api_key(api_key:str):
+        os.environ['FRED_API_KEY'] = api_key
 
 def parameters_to_url(parameters:dict)->str: 
         return '&'.join([f'{p}={v}' for p,v in parameters.items()])
 
-
 def _timestamp_to_str(date:pd.Timestamp)->str:
         return date.strftime('%Y-%m-%d')
 
-def get_series(series_id: ListLike, api_key:str,
-               date_from:str, date_to:str = datetime.date.today()
-              )->pd.DataFrame:
+def get_series(series_id: ListLike,
+               date_from:str, date_to:str = datetime.date.today(),
+               api_key:str=None)->pd.DataFrame:
         '''
         Parameters
         series_id: list of series_id
@@ -28,14 +30,19 @@ def get_series(series_id: ListLike, api_key:str,
                 pd.DataFrame   
                 Dataframe with series_id and date as index.
         '''
+        if api_key is None:
+            api_key = os.environ.get('FRED_API_KEY')
+        if api_key is None:
+            raise ValueError('API key not set. Please set it using set_api_key() or pass it as an argument.')
         date_from = _timestamp_to_str(date_from) if isinstance(date_from, pd.Timestamp) else date_from
         date_to = _timestamp_to_str(date_to) if isinstance(date_to, pd.Timestamp) else date_to
         series_id = series_id.to_list() if isinstance(series_id, pd.Series) else series_id
         series_id = [series_id] if isinstance(series_id, str) else series_id
         return pd.concat([_get_series(i, observation_start = date_from, observation_end = date_to, api_key=api_key) for i in series_id])
-    
-def _get_series(series_id:str, observation_start:str, observation_end:str, api_key:str, cooldown:int=30)->pd.DataFrame:
-        parameters = {'series_id': series_id, 
+
+def _get_series(series_id:str, observation_start:str, observation_end:str, api_key:str=None, cooldown:int=30)->pd.DataFrame:
+
+        parameters = {'series_id': series_id,
                         'api_key': api_key,
                         'observation_start': observation_start,
                         'observation_end': observation_end,
@@ -64,3 +71,31 @@ def _get_series(series_id:str, observation_start:str, observation_end:str, api_k
         out['src']='fred'
         out = out.set_index(['series_id','date'])
         return out
+
+
+def _get_series_info(series_id:str)->pd.DataFrame:
+        parameters = {'series_id': series_id, 
+                        'api_key': API_KEY,
+                        'file_type':'json'}
+        parameters = parameters_to_url(parameters)
+        request = requests.get(f'{API_URL}/series?{parameters}').json()
+        if 'seriess' in request:
+                result = pd.DataFrame(request['seriess'])
+        elif request['error_code']==429:
+                print('Error 429: Too many requests, waiting 30 seconds')
+                time.sleep(30)
+                return _get_series_info(series_id)
+        result = result.rename(columns = {'id':'series_id'})
+        return result
+
+def get_series_info(series_id:list[str]):
+        series_id = [series_id] if isinstance(series_id, str) else series_id
+        series_id = series_id.to_list() if isinstance(series_id, pd.Series) else series_id
+        return pd.concat([_get_series_info(i) for i in series_id])
+
+def add_labels(data:pd.DataFrame, labels:list[str] = None)->pd.DataFrame:
+        result = pd.merge(data.reset_index(),get_series_info(data.index.get_level_values(0).unique()))
+        result = result.set_index(['series_id','date'])
+        if labels is not None:
+                result = result[['value']+labels]
+        return result
