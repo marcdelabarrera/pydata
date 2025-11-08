@@ -1,14 +1,18 @@
 # Standard imports
 from pathlib import Path
 import tempfile
+import requests
 import shutil
+
+from bs4 import BeautifulSoup
 
 # Third party imports
 from ipumspy import IpumsApiClient, MicrodataExtract, readers
 import pandas as pd
 import os
 
-# Samples id https://cps.ipums.org/cps-action/samples/sample_ids
+SAMPLES_URL = "https://cps.ipums.org/cps-action/samples/sample_ids"
+
 
 def set_api_key(api_key:str):
     os.environ['IPUMS_API_KEY'] = api_key
@@ -28,7 +32,7 @@ def read_cps_extract(extract: MicrodataExtract, download_dir = None, api_key = N
     if download_dir is None:
         download_dir = tempfile.mkdtemp()
         delete_dir = True
-    ipums = IpumsApiClient(API_KEY)
+    ipums = IpumsApiClient(api_key)
     ipums.submit_extract(extract)
     ipums.wait_for_extract(extract)
     ipums.download_extract(extract, download_dir=download_dir)
@@ -65,3 +69,13 @@ def extract_to_csv(extract: MicrodataExtract,
 
 #cps_samples = pd.read_csv(Path(__file__).parent / 'cps_samples.csv',sep=';')
 
+def download_cps_samples()->pd.DataFrame:
+    '''
+    Downloads the list of available samples.
+    '''
+    response = requests.get(SAMPLES_URL)
+    soup = BeautifulSoup(response.content, "html.parser")
+    table = soup.find("table", class_="supplementalTable")
+    cps_samples = pd.read_html(str(table))[0]
+    cps_samples.columns = ['sample_id','description']
+    return cps_samples
