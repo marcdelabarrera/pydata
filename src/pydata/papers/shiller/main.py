@@ -2,10 +2,10 @@ import pandas as pd
 import numpy as np
 
 
-
+URL = "https://img1.wsimg.com/blobby/go/e5e77e0b-59d1-44d9-ab25-4763ac982e53/downloads/2d6fa720-95d6-4953-b869-1948ad39173e/ie_data.xls?ver=1764695321121"
 
 def read_data(columns:list=None, date_from:pd.Timestamp=None, date_to:pd.Timestamp=None)->pd.DataFrame:
-    df = pd.read_excel("https://img1.wsimg.com/blobby/go/e5e77e0b-59d1-44d9-ab25-4763ac982e53/downloads/2d6fa720-95d6-4953-b869-1948ad39173e/ie_data.xls?ver=1764695321121",
+    df = pd.read_excel(URL,
                         sheet_name="Data", skiprows=7, skipfooter=1)
     df = df.rename(columns={"Date":"date",
                         "P":"spy_price",
