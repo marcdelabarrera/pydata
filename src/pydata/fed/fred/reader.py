@@ -13,6 +13,13 @@ ListLike = list[str]|pd.Series|str
 def set_api_key(api_key:str):
         os.environ['FRED_API_KEY'] = api_key
 
+def _get_api_key()->str:
+        api_key = os.environ.get('FRED_API_KEY')
+        if api_key is None:
+            raise ValueError('API key not set. Please set it using set_api_key().')
+        return api_key
+
+
 def parameters_to_url(parameters:dict)->str: 
         return '&'.join([f'{p}={v}' for p,v in parameters.items()])
 
@@ -30,10 +37,7 @@ def get_series(series_id: ListLike,
                 pd.DataFrame   
                 Dataframe with series_id and date as index.
         '''
-        if api_key is None:
-            api_key = os.environ.get('FRED_API_KEY')
-        if api_key is None:
-            raise ValueError('API key not set. Please set it using set_api_key() or pass it as an argument.')
+        api_key = _get_api_key() if api_key is None else api_key
         date_from = _timestamp_to_str(date_from) if isinstance(date_from, pd.Timestamp) else date_from
         date_to = _timestamp_to_str(date_to) if isinstance(date_to, pd.Timestamp) else date_to
         series_id = series_id.to_list() if isinstance(series_id, pd.Series) else series_id
@@ -73,9 +77,9 @@ def _get_series(series_id:str, observation_start:str, observation_end:str, api_k
         return out
 
 
-def _get_series_info(series_id:str)->pd.DataFrame:
+def _get_series_info(series_id:str, api_key:str)->pd.DataFrame:
         parameters = {'series_id': series_id, 
-                        'api_key': API_KEY,
+                        'api_key': api_key,
                         'file_type':'json'}
         parameters = parameters_to_url(parameters)
         request = requests.get(f'{API_URL}/series?{parameters}').json()
@@ -88,10 +92,11 @@ def _get_series_info(series_id:str)->pd.DataFrame:
         result = result.rename(columns = {'id':'series_id'})
         return result
 
-def get_series_info(series_id:list[str]):
+def get_series_info(series_id:list[str], api_key:str=None)->pd.DataFrame:
+        api_key = _get_api_key() if api_key is None else api_key
         series_id = [series_id] if isinstance(series_id, str) else series_id
         series_id = series_id.to_list() if isinstance(series_id, pd.Series) else series_id
-        return pd.concat([_get_series_info(i) for i in series_id])
+        return pd.concat([_get_series_info(i, api_key=api_key) for i in series_id])
 
 def add_labels(data:pd.DataFrame, labels:list[str] = None)->pd.DataFrame:
         result = pd.merge(data.reset_index(),get_series_info(data.index.get_level_values(0).unique()))
@@ -99,3 +104,32 @@ def add_labels(data:pd.DataFrame, labels:list[str] = None)->pd.DataFrame:
         if labels is not None:
                 result = result[['value']+labels]
         return result
+
+
+def search_by_tag(tag_names:list[str], api_key:str = None)->pd.DataFrame:
+        '''
+        Finds all series that contain all the tag_names
+        tag_names: list of tags
+        '''
+        api_key = _get_api_key() if api_key is None else api_key
+        tag_names = [tag_names] if isinstance(tag_names, str) else tag_names
+        parameters = {'tag_names': ';'.join(tag_names), 
+                    'api_key': api_key,
+                    'file_type':'json'}
+        parameters = parameters_to_url(parameters)
+        series = requests.get(f'{API_URL}/tags/series?{parameters}').json()['seriess']
+        series = pd.DataFrame([[i['id'],i['title'], i['frequency']]for i in series], columns=['series_id','title','frequency'])
+        return series
+
+def get_tags(series_id:str, api_key:str = None)->pd.DataFrame:
+        '''
+        Gets tags from a given series id
+        '''
+        api_key = _get_api_key() if api_key is None else api_key
+        parameters = {'series_id': series_id, 
+                      'api_key': api_key,
+                      'file_type':'json'}
+        parameters = parameters_to_url(parameters)
+        tags = requests.get(f'{API_URL}/series/tags?{parameters}').json()['tags']
+        tags = pd.DataFrame([[i['name'],i['group_id'], i['notes']]for i in tags], columns=['name','group_id','notes'])
+        return tags
