@@ -1,5 +1,4 @@
 [tool.poetry]
-[tool.poetry]
 name = "pydata"
 version = "0.0.1"
 description = "Datacenter of econ data"
