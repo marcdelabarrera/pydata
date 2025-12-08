@@ -18,7 +18,7 @@ def read_data(date_from:pd.Timestamp = None, date_to:pd.Timestamp = None, column
         df = df[date_from:]
     if date_to:
         df = df[:date_to]
-    if columns == "zero-cupon":
+    if columns == "zero-coupon":
         df = df[_zero_coupon_columns()]
     return df
 
